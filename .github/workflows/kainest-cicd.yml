@@ -114,22 +114,13 @@ jobs:
           echo "[webservers]" > inventory.ini
           echo "${{ secrets.VPS_IP }} ansible_user=${{ secrets.VPS_USER }} ansible_ssh_private_key_file=~/.ssh/id_rsa" >> inventory.ini
 
-      - name: Determine Target Image Tag
-        id: determine_tag
-        run: |
-          # Jika job build berjalan, gunakan SHA baru. Jika di-skip, gunakan tag 'latest' atau SHA terakhir.
-          if [ "${{ needs.build_image.outputs.build_executed }}" == "true" ]; then
-            echo "TARGET_TAG=${{ needs.build_image.outputs.image_tag }}" >> $GITHUB_ENV
-          else
-            echo "TARGET_TAG=latest" >> $GITHUB_ENV
-          fi
-
       - name: Run Ansible Playbook
-        env:
-          TARGET_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TARGET_TAG }}
-          WEBHOOK_URL: ${{ secrets.HONO_WEBHOOK_URL }}
-          # Ansible butuh variabel-variabel ini yang akan di-inject ke .env server
         run: |
+          # Selalu gunakan :latest untuk deployment otomatis.
+          # SHA tag tersedia di GHCR untuk rollback manual jika diperlukan.
+          IMAGE_NAME=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')
+          TARGET_IMAGE="${{ env.REGISTRY }}/${IMAGE_NAME}:latest"
+          
           ansible-playbook -i inventory.ini deploy/ansible/deploy.yml \
             -e "target_image=${TARGET_IMAGE}" \
-            -e "webhook_url=${WEBHOOK_URL}"
+            -e "webhook_url=${{ secrets.HONO_WEBHOOK_URL }}"
