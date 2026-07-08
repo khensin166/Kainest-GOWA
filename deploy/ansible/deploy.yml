@@ -34,6 +34,14 @@
         state: directory
         mode: "0755"
 
+    - name: Memastikan jaringan global 'kainest_net' tersedia
+      command: docker network create kainest_net
+      register: network_result
+      failed_when: 
+        - network_result.rc != 0
+        - "'already exists' not in network_result.stderr"
+      changed_when: network_result.rc == 0
+
     - name: Memaksa pembaruan (Pull & Up) Docker Compose
       command: docker compose up -d --pull always --force-recreate --remove-orphans
       args:
