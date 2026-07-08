@@ -38,6 +38,21 @@
       command: docker compose up -d --pull always --force-recreate --remove-orphans
       args:
         chdir: "{{ project_dir }}"
+      register: compose_result
+      failed_when: compose_result.rc != 0
+      ignore_errors: yes
+
+    - name: Debug Docker Compose Output (Jika Gagal)
+      debug:
+        msg: |
+          STDOUT: {{ compose_result.stdout }}
+          STDERR: {{ compose_result.stderr }}
+      when: compose_result.rc != 0
+
+    - name: Fail jika Docker Compose Gagal
+      fail:
+        msg: "Deployment gagal pada tahapan Docker Compose."
+      when: compose_result.rc != 0
 
     - name: Hapus image lama yang tidak terpakai (Prune)
       command: docker image prune -f
