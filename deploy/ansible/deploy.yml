@@ -22,8 +22,8 @@
         content: |
           TARGET_IMAGE={{ target_image }}
           WEBHOOK_URL={{ webhook_url }}
-          GOWA_BASIC_AUTH_USER=admin
-          GOWA_BASIC_AUTH_PASS=rahasia
+          GOWA_BASIC_AUTH_USER={{ gowa_user | default('admin') }}
+          GOWA_BASIC_AUTH_PASS={{ gowa_pass | default('rahasia') }}
         dest: "{{ project_dir }}/.env"
         mode: '0600'
       no_log: true

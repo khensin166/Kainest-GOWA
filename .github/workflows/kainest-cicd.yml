@@ -123,4 +123,6 @@ jobs:
           
           ansible-playbook -i inventory.ini deploy/ansible/deploy.yml \
             -e "target_image=${TARGET_IMAGE}" \
-            -e "webhook_url=${{ secrets.HONO_WEBHOOK_URL }}"
+            -e "webhook_url=${{ secrets.HONO_WEBHOOK_URL }}" \
+            -e "gowa_user=${{ secrets.GOWA_BASIC_AUTH_USER }}" \
+            -e "gowa_pass=${{ secrets.GOWA_BASIC_AUTH_PASS }}"
