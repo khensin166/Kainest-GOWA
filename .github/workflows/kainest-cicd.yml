@@ -7,7 +7,7 @@ on:
     paths:
       - 'src/**'
       - 'docker/**'
-      - 'Dockerfile'
+      - 'docker/golang.Dockerfile'
       - 'docker-compose.deploy.yml'
       - 'deploy/**'
       - '.github/workflows/kainest-cicd.yml'
@@ -38,7 +38,7 @@ jobs:
       - name: Check changed files
         id: check_paths
         run: |
-          if git diff --name-only HEAD^ HEAD | grep -E '^(src/|docker/|Dockerfile)'; then
+          if git diff --name-only HEAD^ HEAD | grep -E '^(src/|docker/golang.Dockerfile)'; then
             echo "src_changed=true" >> $GITHUB_OUTPUT
           else
             echo "src_changed=false" >> $GITHUB_OUTPUT
@@ -71,7 +71,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/Dockerfile
+          file: ./docker/golang.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
