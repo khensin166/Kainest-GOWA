@@ -28,12 +28,6 @@
         mode: '0600'
       no_log: true
     
-    - name: Memastikan direktori datastore ada (untuk SQLite dan Sessions)
-      file:
-        path: "{{ project_dir }}/datastore"
-        state: directory
-        mode: "0755"
-
     - name: Memastikan jaringan global 'kainest_net' tersedia
       command: docker network create kainest_net
       register: network_result
