@@ -15,12 +15,20 @@ on:
 env:
   REGISTRY: ghcr.io
 
+# Izin eksplisit agar GITHUB_TOKEN bisa membaca kode dan menulis ke GHCR
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   # ==========================================
   # JOB 1: BUILD & PUSH IMAGE (Hanya jika Source Code berubah)
   # ==========================================
   build_image:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     # Mengecek apakah ada perubahan di Dockerfile atau Go source code
     outputs:
       image_tag: ${{ steps.set_tag.outputs.TAG }}
