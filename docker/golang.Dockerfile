@@ -1,5 +1,5 @@
 ############################
-# STEP 1 build executable binary1
+# STEP 1 build executable binary
 ############################
 FROM golang:1.25-alpine3.23 AS builder
 RUN apk add --no-cache gcc musl-dev gcompat
