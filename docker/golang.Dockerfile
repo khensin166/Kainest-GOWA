@@ -1,4 +1,5 @@
 ############################
+# DUMMY COMMENT TO TRIGGER CI BUILD
 # STEP 1 build executable binary
 ############################
 FROM golang:1.25-alpine3.23 AS builder
