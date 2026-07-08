@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  gowa:
+    # Ansible akan me-replace ini saat deploy, tapi default-nya latest
+    image: ${TARGET_IMAGE:-ghcr.io/khensin166/kainest-gowa:latest}
+    container_name: kainest-gowa
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - gowa_data:/app/datastore
+    environment:
+      # Credential masuk ke Web UI GOWA
+      - BASIC_AUTH_USERNAME=${GOWA_BASIC_AUTH_USER:-admin}
+      - BASIC_AUTH_PASSWORD=${GOWA_BASIC_AUTH_PASS:-admin}
+      
+      # Webhook URL (Ke Hono)
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+      
+      # Konfigurasi GOWA lainnya
+      - APP_PORT=3000
+      - APP_DEBUG=false
+      - APP_OS=KainestOS
+      - DB_DIALECT=sqlite3
+      - DB_URI=datastore/database.db
+    networks:
+      - kainest_net
+
+networks:
+  kainest_net:
+    external: true
+
+volumes:
+  gowa_data:

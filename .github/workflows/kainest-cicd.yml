@@ -1,0 +1,122 @@
+name: Kainest GOWA CI/CD
+
+on:
+  push:
+    branches: [ "master", "main" ]
+    # Workflow ini akan mendeteksi perubahan berdasarkan path
+    paths:
+      - 'src/**'
+      - 'docker/**'
+      - 'Dockerfile'
+      - 'docker-compose.deploy.yml'
+      - 'deploy/**'
+      - '.github/workflows/kainest-cicd.yml'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ==========================================
+  # JOB 1: BUILD & PUSH IMAGE (Hanya jika Source Code berubah)
+  # ==========================================
+  build_image:
+    runs-on: ubuntu-latest
+    # Mengecek apakah ada perubahan di Dockerfile atau Go source code
+    outputs:
+      image_tag: ${{ steps.set_tag.outputs.TAG }}
+      build_executed: ${{ steps.check_paths.outputs.src_changed }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check changed files
+        id: check_paths
+        run: |
+          if git diff --name-only HEAD^ HEAD | grep -E '^(src/|docker/|Dockerfile)'; then
+            echo "src_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "src_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set Image Tag (Commit SHA)
+        id: set_tag
+        run: echo "TAG=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Log in to the Container registry
+        if: steps.check_paths.outputs.src_changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        if: steps.check_paths.outputs.src_changed == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        if: steps.check_paths.outputs.src_changed == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ==========================================
+  # JOB 2: ANSIBLE DEPLOY TO VPS
+  # ==========================================
+  deploy_to_server:
+    needs: build_image
+    runs-on: ubuntu-latest
+    # Dijalankan jika build sukses ATAU jika build di-skip (hanya ubah ansible/compose)
+    if: always() && (needs.build_image.result == 'success' || needs.build_image.result == 'skipped')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: sudo apt-get update && sudo apt-get install -y ansible sshpass
+
+      - name: Setup SSH Key & Ansible Inventory
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.VPS_IP }} >> ~/.ssh/known_hosts
+          
+          # Buat file inventory sementara
+          echo "[webservers]" > inventory.ini
+          echo "${{ secrets.VPS_IP }} ansible_user=${{ secrets.VPS_USER }} ansible_ssh_private_key_file=~/.ssh/id_rsa" >> inventory.ini
+
+      - name: Determine Target Image Tag
+        id: determine_tag
+        run: |
+          # Jika job build berjalan, gunakan SHA baru. Jika di-skip, gunakan tag 'latest' atau SHA terakhir.
+          if [ "${{ needs.build_image.outputs.build_executed }}" == "true" ]; then
+            echo "TARGET_TAG=${{ needs.build_image.outputs.image_tag }}" >> $GITHUB_ENV
+          else
+            echo "TARGET_TAG=latest" >> $GITHUB_ENV
+          fi
+
+      - name: Run Ansible Playbook
+        env:
+          TARGET_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TARGET_TAG }}
+          WEBHOOK_URL: ${{ secrets.HONO_WEBHOOK_URL }}
+          # Ansible butuh variabel-variabel ini yang akan di-inject ke .env server
+        run: |
+          ansible-playbook -i inventory.ini deploy/ansible/deploy.yml \
+            -e "target_image=${TARGET_IMAGE}" \
+            -e "webhook_url=${WEBHOOK_URL}"
