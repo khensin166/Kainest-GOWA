@@ -70,13 +70,24 @@
         chdir: "{{ project_dir }}"
       ignore_errors: yes
 
-    - name: Paksa hentikan dan hapus SEMUA container Docker yang menduduki port target
+    - name: Paksa matikan container dan proses apapun yang mengunci port target
       shell: |
-        docker ps -q --filter "publish={{ gowa_port | default('3000') }}" | xargs -r docker rm -f
-      ignore_errors: yes
-
-    - name: Pastikan container kainest-gowa lama benar-benar bersih
-      shell: docker rm -f kainest-gowa || true
+        TARGET_PORT="{{ gowa_port | default('3000') }}"
+        # 1. Periksa semua container docker yang mengekspos target port
+        for id in $(docker ps -q); do
+          if docker port "$id" 2>/dev/null | grep -q ":$TARGET_PORT"; then
+            NAME=$(docker inspect --format '{{ '{{' }}.Name{{ '}}' }}' "$id" 2>/dev/null || echo "$id")
+            echo "Killing conflicting container: $NAME ($id)"
+            docker stop -t 3 "$id" || true
+            docker rm -f "$id" || true
+          fi
+        done
+        # 2. Pastikan container kainest-gowa bersih
+        docker rm -f kainest-gowa || true
+        # 3. Bunuh zombie docker-proxy jika soket port masih tertinggal di kernel
+        pkill -9 -f "docker-proxy.*$TARGET_PORT" || true
+        # 4. Bunuh proses host lain di port tersebut jika ada
+        fuser -k -9 "$TARGET_PORT/tcp" 2>/dev/null || true
       ignore_errors: yes
 
     - name: Deteksi apakah port target masih ditempati container atau proses lain
