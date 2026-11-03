@@ -36,28 +36,64 @@
         - "'already exists' not in network_result.stderr"
       changed_when: network_result.rc == 0
 
-    - name: Memaksa pembaruan (Pull & Up) Docker Compose
-      command: docker compose up -d --pull always --force-recreate --remove-orphans
+    - name: Login ke GitHub Container Registry di server target
+      shell: echo "{{ ghcr_token }}" | docker login ghcr.io -u "{{ ghcr_user }}" --password-stdin
+      when: ghcr_token is defined and ghcr_token != ""
+      no_log: true
+      ignore_errors: yes
+
+    - name: Membersihkan image menggantung (menghindari disk penuh)
+      command: docker image prune -f
+      ignore_errors: yes
+
+    - name: Pull image terbaru Docker Compose
+      command: docker compose --progress plain pull
+      args:
+        chdir: "{{ project_dir }}"
+      register: pull_result
+      ignore_errors: yes
+
+    - name: Debug Output Pull (Jika Gagal)
+      debug:
+        msg: "{{ pull_result.stderr_lines | default(pull_result.stderr) }}"
+      when: pull_result.rc != 0
+
+    - name: Fail jika Docker Compose Pull Gagal
+      fail:
+        msg: "Gagal menarik image dari GHCR (Pull error). Periksa akses registry ghcr.io atau kuota penyimpanan VPS."
+      when: pull_result.rc != 0
+
+    - name: Memaksa pembaruan (Up) Docker Compose
+      command: docker compose --progress plain up -d --force-recreate --remove-orphans
       args:
         chdir: "{{ project_dir }}"
       register: compose_result
-      failed_when: compose_result.rc != 0
       ignore_errors: yes
 
     - name: Debug Docker Compose Output (Jika Gagal)
       debug:
-        msg: |
-          STDOUT: {{ compose_result.stdout }}
-          STDERR: {{ compose_result.stderr }}
+        msg: "{{ compose_result.stderr_lines | default(compose_result.stderr) }}"
       when: compose_result.rc != 0
+
+    - name: Ambil log container jika startup gagal
+      command: docker logs --tail=50 kainest-gowa
+      register: container_crash_logs
+      when: compose_result.rc != 0
+      ignore_errors: yes
+
+    - name: Tampilkan log crash container
+      debug:
+        msg: "{{ container_crash_logs.stdout_lines | default(container_crash_logs.stdout) }}"
+      when: compose_result.rc != 0 and container_crash_logs.stdout is defined
 
     - name: Fail jika Docker Compose Gagal
       fail:
-        msg: "Deployment gagal pada tahapan Docker Compose."
+        msg: "Deployment gagal pada tahapan Docker Compose Up. Periksa log detail di atas."
       when: compose_result.rc != 0
 
     - name: Hapus image lama yang tidak terpakai (Prune)
       command: docker image prune -f
+      ignore_errors: yes
 
     - name: Verifikasi Container Berjalan
       shell: docker inspect kainest-gowa --format='{{ '{{' }}.State.Status{{ '}}' }}'

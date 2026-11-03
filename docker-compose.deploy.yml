@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   gowa:
     # Ansible akan me-replace ini saat deploy, tapi default-nya latest
