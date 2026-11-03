@@ -1,137 +1,207 @@
-# PROJECT KNOWLEDGE BASE
+# Kainest Project - Agent Handoff Notes
 
-Generated: 2026-06-06
-Commit: 8c4ea8f
-Branch: fix/chatwoot-postgres
+## Status Terkini (03 Juni 2026)
+- **Frontend (Kainest Vue 3):**
+  - Menggunakan UI/UX modern (vibrant colors, glassmorphism, blob animation).
+  - Auth flow (Login, Register, Forgot Password, Reset Password) sudah terkoneksi dengan backend *Better Auth*.
+  - Halaman Lupa Password (`/forgot-password`) & Reset Password (`/reset-password`) telah didesain ulang dengan gaya *split-screen* yang sama dengan halaman Login.
+  - Terdapat komponen panduan (`<PageGuide>`) di seluruh halaman utama.
 
-## OVERVIEW
+- **Backend (Kainest_Be - Hono & Prisma):**
+  - Menggunakan *Better Auth* v1.6+. Endpoint untuk lupa password berada di `/auth/request-password-reset`.
+  - Integrasi **Resend** telah ditambahkan di dalam `auth.ts` untuk mengirimkan email *Reset Password*.
+  - Template email telah diekstrak secara rapi ke `src/infrastructure/email/templates/resetPasswordTemplate.ts`.
+  - Variabel lingkungan `RESEND_FROM_EMAIL` sudah disiapkan di `.env`.
 
-Go WhatsApp Web Multi-Device is a Go 1.25.5 WhatsApp Web API server with REST and MCP SSE modes.
-It uses whatsmeow sessions, Fiber, plain Vue 3 modules, and SQLite-backed chat/session storage by default.
+## Update 04 Juni 2026
+- **Frontend**: Dashboard dirombak dengan memfokuskan layout pada ringkasan keuangan dan Aktivitas Terbaru di sisi utama. `System Updates` dan `User Feedback` ditarik dinamis dari API. `DropdownNotifications` kini interaktif (terhubung ke backend). Sidebar `filteredMenu` bereaksi otomatis saat login, dan menu `Vault Rahasia` sudah dilindungi permission.
+- **Backend**: Skema `NotificationLog` dan `ShiftActivity` lama dihilangkan, digantikan dengan `AppNotification` & `UserFeedback` serta `SystemUpdate`. Endpoint API notifikasi, feedback, dan changelog (termasuk fitur *Sync dari GitHub* dengan deteksi keyword `[BLAST]`) telah aktif di Hono.
+- **Bot WhatsApp**: Alur registrasi `!link` diperketat (tidak bisa lagi aktivasi personal sebelum membuat grup). Bot kini juga merespons transaksi berhasil dengan mengirimkan stiker animasi *kicaw*.
 
-## STRUCTURE
+## Update 13 Juni 2026
+- **Frontend**:
+  - Menyederhanakan modal Atur Pemasukan (`BudgetSetupModal.vue`) dengan menghapus input target tabungan yang redundan dan menambahkan teks edukasi penjelas gaji sebagai acuan 100%.
+  - Memberikan helper text tambahan pada tabel input Kelola Kantong (`PocketManagementModal.vue`).
+  - Menambahkan panduan visual interaktif (efek *glow pulse* ungu) pada tombol "Kelola Kantong" di dashboard saat terdeteksi user telah mengisi gaji namun belum memiliki kantong sama sekali (alurnya diarahkan secara visual).
+- **Backend**:
+  - Sinkronisasi skema Prisma (`schema.prisma`) untuk model `BackupTargets`, `ChatLogs`, dan `ApiKeys` dengan schema `kainest`.
+  - Pembersihan file client Supabase lama (`supabaseClient.ts`) yang tidak digunakan untuk menjaga kebersihan repositori.
+- **Bot WhatsApp (Staging Safe Mode, Ephemeral Fix & Schema Views)**:
+  - Mengembalikan konfigurasi schema Supabase ke default (`public`) dan menggunakan PostgreSQL Views di skema `public` yang merujuk ke tabel asli di skema `kainest` untuk menghindari pemblokiran query oleh PostgREST.
+  - Menerapkan isolasi environment via `BOT_ENV_MODE` (`staging` / `production`). Pada mode staging, bot hanya merespons nomor terdaftar di `STAGING_ALLOWED_NUMBERS` dan harus diawali perintah `!dev ` (prefix dilepas otomatis saat masuk ke pemrosesan AI).
+  - Isolasi blast pengingat shift kerja pada mode staging agar hanya terkirim ke `STAGING_ALLOWED_NUMBERS`.
+  - Perbaikan warning *"This message will not disappear..."* dengan menyalin status durasi ephemeral (`expiration` milidetik) dari pesan masuk dan meneruskannya ke objek `sendMessage` (baik teks maupun stiker).
 
-```text
-go-whatsapp-web-multidevice/
-|-- src/                         # Go module root; run Go commands here
-|   |-- main.go                  # go:embed views, then cmd.Execute
-|   |-- cmd/                     # Cobra root, rest, mcp, global app wiring
-|   |-- config/                  # Mutable package globals bound from flags/env
-|   |-- domains/                 # Interfaces and DTOs; see child AGENTS
-|   |-- usecase/                 # Business orchestration; see child AGENTS
-|   |-- validations/             # ozzo-validation plus table tests
-|   |-- ui/                      # REST, MCP, websocket adapters
-|   |-- infrastructure/
-|   |   |-- whatsapp/            # Device manager, events, presence pulse, JID utilities
-|   |   |-- chatstorage/         # chat/message/device SQL repository
-|   |   `-- chatwoot/            # Chatwoot REST sync and direct PG import
-|   |       `-- pgimport/        # Direct Chatwoot Postgres importer; see child AGENTS
-|   |-- views/                   # Embedded Vue 3 plain JS UI
-|   |-- statics/                 # Runtime media, QR codes, send items
-|   `-- storages/                # Runtime SQLite DBs and history dumps
-|-- docs/                        # OpenAPI, webhook payload docs, SDK config
-|-- docker/                      # Multi-stage Alpine image and entrypoint
-|-- gallery/                     # Static screenshots and project images
-`-- .github/workflows/           # Docker publish, release, latest promotion
+## Update 14 Juni 2026
+- **Frontend & Backend (Isolasi Kata Kunci Kantong)**: 
+  - Logika kata kunci AI (*keywords*) dipindahkan dari level Kategori ke level Kantong (`BudgetPocket`). Ini memungkinkan pengguna menambahkan kata kunci custom ke kantong mereka sendiri tanpa memengaruhi kategori global atau pengguna lain.
+  - Kategori tetap menyimpan `keywords` sebagai *template* (nilai *default*) saat pengguna membuat kantong baru.
+  - Jika pengguna mengosongkan *keywords* pada kantongnya, sistem (Kenin AI) akan otomatis melakukan *fallback* ke *keywords* milik kategori sebagai pengaman.
+
+## Update 19 Juni 2026
+- **Frontend (UI & UX Dashboard/Rekap)**:
+  - Halaman **Rekap Bulanan** (`FinancialHistoryPage.vue`) mendapat fitur *filter* dinamis (3, 6, 12, Semua rentang bulan). Kartu akordion bulan yang berjalan otomatis terbuka (*auto-expand*) saat halaman dimuat. 
+  - Membersihkan elemen statis "Rincian segera hadir" dari *Donut Chart* pemasukan, serta mengoptimalkan desain UI dengan menghilangkan label nominal (Masuk/Keluar) ganda di header daftar akordion.
+  - Perbaikan *Trend Line Chart* di Dashboard: Sistem sekarang mengagregasi data transaksi sehingga nominal di hari yang sama tergabung menjadi satu titik koordinat yang akurat.
+- **Frontend (Transaksi & Form)**:
+  - Transaksi tipe pemasukan (*Income*) kini stabil ditampilkan dengan warna Hijau dan *prefix* `+`.
+  - Memperbaiki siklus hidup (*lifecycle*) form edit transaksi (`TransactionForm.vue`) dengan menambah *watcher* pada `props.initialData`. Form kini berpindah tab (Pemasukan/Pengeluaran) secara reaktif saat mengedit transaksi berbeda.
+  - Menambal *property* `type` yang terlewat pada proses *mapping* (`TransactionEntity.js` dan `BudgetMapper.js`), memastikan komponen UI mengenali tipe transaksi dengan benar.
+  - Saat menambah/mengedit transaksi, `useBudgetStore` kini memicu sinkronisasi otomatis ke Riwayat Bulanan.
+
+## Update 20 Juni 2026
+- **Frontend (Profile Store)**:
+  - Memperbaiki `useProfileStore.js` agar data role dan permissions user tidak hilang (dipertahankan dari session yang sedang berjalan) saat memperbarui profil atau foto profil.
+- **Backend (Transaction & Spending Trend)**:
+  - Menyertakan include `category` saat data transaksi baru dibuat di `TransactionRepository.ts`.
+  - Melakukan agregasi (group-by tanggal) di `GetSpendingTrendUseCase.ts` untuk memastikan transaksi yang terjadi di hari yang sama terjumlah ke satu titik koordinat di diagram tren pengeluaran, sehingga tidak ada duplikasi tanggal.
+  - Memastikan properti `type` (INCOME/EXPENSE) hasil klasifikasi AI diteruskan dengan benar ke prisma create di `ProcessBotTransactionUseCase.ts`.
+- **Bot WhatsApp (Unified Message Template)**:
+  - Memperbarui template respons transaksi berhasil di `expenseUseCase.js` menjadi format tunggal yang dinamis.
+  - Template baru mendukung icon kategori dinamis di label Pocket, format waktu terstandar (`20 Juni 2026 pukul 06.33`), header/footer bervariasi yang disesuaikan secara cerdas berdasarkan tipe transaksi (Pemasukan vs Pengeluaran).
+
+## Update 21 Juni 2026
+- **Frontend (Tren Keuangan)**:
+  - Mengubah tampilan grafik Tren Pengeluaran menjadi _Dual Line Chart_ (Pengeluaran berwarna Merah dan Pemasukan berwarna Hijau).
+  - Komponen Vue dan Store telah disesuaikan untuk membaca struktur balasan API baru yang memisahkan `expenseTrend` dan `incomeTrend`.
+- **Backend (API & Skema DB)**:
+  - Endpoint Tren Pengeluaran kini mem- _fetch_ data transaksi INCOME dan EXPENSE secara paralel dari database dan memisahkannya dalam respons JSON.
+  - Menambahkan kolom `botPhoneNumberStaging` ke tabel `WaBotConfig` agar bot Staging dan Production bisa menggunakan nomor WA yang berbeda tanpa saling menimpa data satu sama lain.
+  - Membalik urutan validasi grup: Jika *user* tak terdaftar mengirim pesan dari dalam grup, bot akan melakukan _silent ignore_ (tanpa balasan/reaksi sama sekali) untuk mencegah *spam*. Sapaan dasar (`hai`, `halo`) kini diproses sebagai perintah agar bot bisa merespons di grup yang belum diaktifkan.
+  - Memperbaiki fitur sinkronisasi *System Updates* dari GitHub. Mengatasi *delay cache* endpoint `/releases` GitHub dengan cara memanggil `/releases/latest` secara paralel dan menggabungkan hasilnya tanpa duplikasi, sehingga rilis yang baru saja dipublikasikan bisa langsung terdeteksi.
+- **Bot WhatsApp**:
+  - `syncBotInfo` sekarang mengirimkan informasi `BOT_ENV_MODE` ke Backend saat me-*restart* koneksi, memungkinkan Backend memisahkan _update_ profil bot Staging vs Prod.
+  - Mengimplementasikan **Jeda Mengetik Universal (1.5s)** pada seluruh _outgoing message_. Selain memberi kesan natural, hal ini terbukti menyelesaikan masalah permanen di mana pesan pertama bot pasca _restart_ sering memunculkan _error_ "Waiting for this message" akibat berpacu dengan inisialisasi _E2EE Sender Key_.
+
+## Update 27 Juni 2026
+- **Bot WhatsApp (Auto-Restart QR Code)**:
+  - Memperbaiki bug di mana bot tidak memunculkan QR Code baru di web setelah pengguna melakukan *logout* (keluar dari perangkat tertaut di HP).
+  - Kini, ketika sesi terputus dengan alasan `loggedOut`, sistem akan secara fisik menghapus folder kredensial `baileys_auth_info` dan melakukan *auto-restart* sesi dalam 3 detik, sehingga QR Code baru otomatis ter- *generate* dan dikirimkan kembali ke Frontend.
+
+## Update 2 Juli 2026
+- **Backend (Perbaikan Rollover Kantong Awal Bulan)**:
+  - Memperbaiki bug di mana kantong yang dikonfigurasi menggunakan **persentase gaji** mendapatkan `limitAmount = 0` saat sistem secara otomatis membuat rekap (*history*) bulan baru.
+  - Penyebab: Saat membuat snapshot kantong untuk bulan baru, sistem hanya membaca kolom `limitAmount` tanpa menghitung ulang nilai persentase terhadap gaji terkini.
+  - Perbaikan di `BudgetRepository.ts` → fungsi `syncMonthlyHistory`: Sekarang sistem mengecek kolom `percentage`. Jika bernilai `> 0`, maka limit dihitung ulang secara otomatis dengan formula `Math.floor((percentage / 100) * salary)`, memastikan template kantong bulan baru selalu akurat.
+
+## Update 21 Juli 2026
+- **Frontend**:
+  - Menyederhanakan alur *Onboarding* dengan menghapus langkah usang "Pairing Perangkat" di `pageGuides.js`.
+  - Mengotomatiskan pemicu modal "Kelola Kantong" di Dashboard agar tampil secara langsung bagi pengguna yang belum mengatur kantong mereka.
+- **Backend (WA Bot Commands & Universal Footer)**:
+  - Mengimplementasikan sejumlah *command* baru untuk berinteraksi dengan bot WhatsApp: `!today`, `!weekly`, `!monthly`, `!balance`, `!top`, `!recent`, `!undo`, dan `!help` melalui `ProcessBotTransactionUseCase.ts`.
+  - Memperbaiki logika penghitungan `!balance` agar secara akurat menjumlahkan transaksi (INCOME dan EXPENSE) berdasarkan bulan berjalan dan menggabungkannya dengan batas/anggaran (*limit*) dari `BudgetPocket`.
+  - Menambahkan *Universal Help Footer* (`💡 Ketik !help untuk bantuan.`) ke seluruh balasan bot (termasuk *error*, *greeting*, dan perintah yang sukses) agar pengguna awam selalu tahu cara meminta bantuan.
+- **Backend (Perbaikan Voice Note GOWA)**:
+  - Memperbaiki *bug* kegagalan transkripsi suara (pesan *error* `"Audio buffer kosong"` dan `"phone: cannot be blank"`). Akar masalahnya adalah hilangnya parameter `?phone=` pada *endpoint download media* GOWA.
+  - Memodifikasi `GowaWebhookController.ts` agar menyisipkan `targetPhone` di kueri URL saat mengunduh VN, sehingga data audio dapat diteruskan dengan sukses ke layanan Cloudflare Whisper untuk ditranskripsi ke teks.
+
+## Catatan untuk Agent Selanjutnya
+1. Pastikan selalu mematuhi instruksi **Web Application Development** yang mengutamakan UI yang estetik, tidak generik, dan menggunakan animasi ringan (micro-animations).
+2. Jika ada masalah terkait rute autentikasi *Better Auth*, perhatikan versi terbarunya (khususnya perbedaan antara endpoint lama `/forget-password` dengan yang baru `/request-password-reset`).
+3. Database *Supabase* (pooler port 6543) sesekali mungkin mengalami *timeout* saat inisialisasi awal di mode *development* lokal, cukup jalankan ulang jika terjadi *error*.
+4. **Perhatian Penting**: Di sisi Backend, saat ini chat pribadi melalui Linked Devices (`@lid`) memicu error 403 ("bot belum diaktifkan di grup") karena validasi backend menganggap domain JID `@lid` memerlukan aktivasi grup. Ke depannya, validasi ini harus disesuaikan agar mengenali chat pribadi secara tepat.
+5. **Peringatan/Future Repair (Disappearing Messages di WA)**: Meskipun parameter `ephemeralExpiration` sudah diekstrak dari pesan masuk dan diteruskan ke opsi pengiriman Baileys sehingga pesan bot kini dapat terbaca dengan baik, terkadang gelembung peringatan WhatsApp *"This message won't disappear. The sender may be on an old version of WhatsApp"* masih muncul secara paralel. Investigasi lebih lanjut diperlukan (misal: memeriksa apakah format ekstraksi regex dari `JSON.stringify(msg)` ada yang kurang presisi, atau status default chat-level ephemeral di sisi client perlu diatur). Hal ini didefer untuk perbaikan di masa mendatang.
+
+
+---
+
+## Panduan Operasional Administrator
+### Cara Merilis "System Updates" & Notifikasi Blast
+Untuk menambahkan pembaruan sistem (*changelog*) agar muncul di Dashboard aplikasi, dan/atau mengirim notifikasi ke semua pengguna:
+
+1. **Buat Release di GitHub**:
+   - Buka repositori frontend/backend di GitHub.
+   - Pergi ke menu **Releases** lalu klik **Draft a new release**.
+   - Isi form (pilih/buat Tag baru seperti `v1.4.0`, masukkan judul fitur, dan tulis deskripsi rilis).
+2. **Berikan Keyword Blast (Opsional)**:
+   - Jika Anda **ingin mengirim notifikasi lonceng** ke semua pengguna terdaftar saat rilis ini disinkronisasi, tambahkan kata kunci `[BLAST]` di bagian mana saja pada deskripsi GitHub Anda.
+   - Jika *tidak ingin* mengirim notifikasi (hanya *silent update*), **jangan** cantumkan kata kunci tersebut.
+   - Klik **Publish release** di GitHub.
+3. **Sinkronisasi di Aplikasi Kainest**:
+   - Buka aplikasi Kainest dan *login* menggunakan akun yang memiliki *role* **Admin**.
+   - Masuk ke **Dashboard**.
+   - Pada panel *System Updates* (Kainest Changelog) di sebelah kanan, klik tombol ungu **"Sync GitHub"**.
+   - Server otomatis akan mem- *parsing* rilis baru, menyimpannya di database, dan menghapus teks `[BLAST]` tersebut agar tidak terlihat aneh di UI pengguna.
+   - Selesai! Pembaruan kini sudah terpampang di layar seluruh pengguna.
+
+### Cara Mengonfigurasi Docker & Staging Safe Mode di VPS
+Karena bot Staging dan Production berjalan di atas VPS yang sama dan menggunakan berkas `.env` yang sama, gunakan fitur override environment pada berkas `docker-compose.yml` VPS Anda untuk mengisolasi perilaku masing-masing instance.
+
+#### 1. Perbarui Berkas `.env` di VPS Anda
+Tambahkan/sesuaikan variabel berikut di dalam berkas `.env` global di VPS Anda:
+
+```env
+# ==========================================
+# 🤖 WA BOT ADVANCED CONFIGURATIONS (Staging Safe Mode)
+# ==========================================
+# Nomor WhatsApp Admin yang diperbolehkan di mode Staging (pisahkan dengan koma)
+STAGING_ALLOWED_NUMBERS="62812345678,62887654321"
+
+# URL Backend Terpisah
+KAINEST_API_URL_PROD="https://kainest.be.kenantomfie.com"
+KAINEST_API_URL_STAGING="https://staging.kainest.be.kenantomfie.com"
 ```
 
-## WHERE TO LOOK
+#### 2. Perbarui Berkas `docker-compose.yml` di VPS Anda
+Sesuaikan bagian service untuk container Production (`wa-bot`) dan Staging (`wa-bot-staging`) agar menggunakan *overrides* variabel lingkungan secara terpisah:
 
-| Task | Location | Notes |
-|------|----------|-------|
-| Add message type | `src/domains/send/`, `src/usecase/send.go`, `src/ui/rest/send.go` | REST is primary; MCP support is selective. |
-| Add quoted reply support | `src/domains/send/`, `src/usecase/send.go`, `src/views/components/Send*.js` | Optional `reply_message_id`; use device-scoped quote lookup. |
-| Add REST endpoint | `src/ui/rest/`, `src/usecase/`, `src/domains/` | Handler parses request, usecase validates/executes, domain owns DTO/interface. |
-| Add MCP tool | `src/ui/mcp/` | Register in `Add*Tools`; resolve a device with `helpers.ContextWithDefaultDevice`. |
-| Handle WhatsApp event | `src/infrastructure/whatsapp/event_*.go` | Register the concrete event in `event_handler.go`. |
-| Presence behavior | `src/infrastructure/whatsapp/event_handler.go`, `presence_pulse.go`, `src/cmd/helpers.go` | Connect-time and scheduled pulse presence. |
-| Add chat storage method | `src/domains/chatstorage/interfaces.go`, `sqlite_repository.go`, `chatstorage_wrapper.go` | Update domain, repository, and wrapper together. |
-| Add DB migration | `src/infrastructure/chatstorage/sqlite_repository.go` `getMigrations()` | Append only. Current list has 29 migrations. |
-| Add UI component | `src/views/components/`, `src/views/index.html` | Plain JS modules, no `.vue` single-file components. |
-| Device management | `src/infrastructure/whatsapp/device_manager.go` | Central registry and purge/load/create logic. |
-| Chatwoot integration | `src/infrastructure/chatwoot/` and `src/ui/rest/chatwoot.go` | REST sync, public webhook, optional direct Postgres import. |
-| Direct Chatwoot import | `src/infrastructure/chatwoot/pgimport/` | Direct Chatwoot schema writes; see child AGENTS. |
-| Chatwoot link/retry state | `src/infrastructure/chatstorage/sqlite_repository.go`, `src/infrastructure/whatsapp/webhook_forward.go` | Message links, read/delete sync, and persistent forward retries. |
-| CLI flags / config | `src/cmd/root.go`, `src/config/settings.go`, `src/.env.example` | Flags and env mutate config package globals. |
-| Shared helpers | `src/pkg/utils/`, `src/pkg/error/`, `src/pkg/sqlite/` | Utilities, aliased package errors, and CGO/purego SQLite driver selection. |
-| Docker/release | `docker/golang.Dockerfile`, `.github/workflows/*.yaml` | Multi-arch Docker, tag/manual workflows, generated GoReleaser configs. |
+```yaml
+version: '3.8'
 
-## CODE MAP
+services:
+  # Instance Bot WhatsApp Production
+  wa-bot:
+    image: wa-bot:latest  # Sesuaikan dengan konfigurasi Anda
+    container_name: wa-bot-prod
+    restart: always
+    environment:
+      - PORT=3000
+      - BOT_ENV_MODE=production
+      - KAINEST_API_URL=${KAINEST_API_URL_PROD}
+    env_file:
+      - .env
+    # ... volume, port, dll.
 
-| Symbol | Type | Location | Role |
-|--------|------|----------|------|
-| `cmd.Execute` | function | `src/cmd/root.go` | Stores embedded views and runs Cobra root command. |
-| `initApp` | function | `src/cmd/root.go` | Creates folders, DBs, WhatsApp client, device manager, repositories, and usecases. |
-| `DeviceManager` | struct | `src/infrastructure/whatsapp/device_manager.go` | Owns active device registry and persisted device records. |
-| `DeviceInstance` | struct | `src/infrastructure/whatsapp/device_instance.go` | Wraps per-device ID, JID, client, state, and storage. |
-| `IChatStorageRepository` | interface | `src/domains/chatstorage/interfaces.go` | Storage contract for chats, messages, edits, calls, stats, schema, and device records. |
-| `SQLiteRepository` | struct | `src/infrastructure/chatstorage/sqlite_repository.go` | Implements chat storage, Chatwoot link/retry state, and inline migrations. |
-| `deviceChatStorage` | wrapper | `src/infrastructure/whatsapp/chatstorage_wrapper.go` | Injects or enforces device scoping for event-side storage access. |
-| `StartPresencePulseScheduler` | function | `src/infrastructure/whatsapp/presence_pulse.go` | Periodically marks connected devices available, then unavailable. |
-| `StartChatwootForwardRetryWorker` | function | `src/infrastructure/whatsapp/webhook_forward.go` | Replays queued WhatsApp-to-Chatwoot forward failures. |
-| `NormalizeJIDFromLID` | function | `src/infrastructure/whatsapp/jid_utils.go` | Converts `@lid` JIDs to phone JIDs where whatsmeow can resolve them. |
-| `pgimport.Importer` | struct | `src/infrastructure/chatwoot/pgimport/conn.go` | Direct Chatwoot Postgres importer for historical messages. |
-| `DeviceMiddleware` | middleware | `src/ui/rest/middleware/device.go` | Resolves `X-Device-Id` or `device_id` and injects device context. |
-| `ContextWithDefaultDevice` | helper | `src/ui/mcp/helpers/context.go` | MCP equivalent of REST device middleware for default/only device. |
+  # Instance Bot WhatsApp Staging
+  wa-bot-staging:
+    image: wa-bot:latest  # Sesuaikan dengan konfigurasi Anda
+    container_name: wa-bot-staging
+    restart: always
+    environment:
+      - PORT=3001  # Sesuaikan port jika diekspos
+      - BOT_ENV_MODE=staging
+      - KAINEST_API_URL=${KAINEST_API_URL_STAGING}
+      - STAGING_ALLOWED_NUMBERS=${STAGING_ALLOWED_NUMBERS}
+    env_file:
+      - .env
+    # ... volume, port, dll.
+```
 
-## CONVENTIONS
-
-- Go commands run from `src/`; the repo root is not the Go module root.
-- Local runtime paths are relative to process cwd, so direct local runs should start from `src/`.
-- Config priority is Cobra flags, then env/Viper, then `.env` loaded from `src/`.
-- REST and MCP share the same app initialization and cannot safely run together against the same whatsmeow state in one process.
-- Process-wide helpers in `cmd/helpers.go` guard auto-reconnect and presence-pulse startup for both REST and MCP.
-- `domains/` defines DTOs and interfaces. Current contracts expose some whatsmeow and multipart types; follow existing contracts but do not add executable business logic there.
-- Usecases validate first, then obtain the device/client from context, then call whatsmeow/storage.
-- Device-scoped REST routes must pass `whatsapp.ContextWithDevice(c.UserContext(), getDeviceFromCtx(c))`.
-- MCP handlers do not receive `X-Device-Id`; they resolve the default/only device via `ContextWithDefaultDevice`.
-- Optional boolean filters use `*bool` so nil means "not provided".
-- Tests are colocated as `*_test.go`, mostly table-driven with `testify/assert` and occasional `testify/suite`.
-- Tests that mutate config, package globals, or background worker state should stay serial and restore state with `defer`.
-- Chatwoot direct Postgres import is for history. Live forwarding still uses REST plus link/retry storage.
-
-## ANTI-PATTERNS
-
-- Do not query chats or messages without `device_id` scoping for user-facing/device-scoped flows.
-- Do not use `instance.ID()` as the chat/message table `device_id` after login; use `client.Store.ID.ToNonAD().String()` when deriving the WhatsApp storage identity.
-- Do not use raw `@lid` event JIDs for DB lookups; normalize with `NormalizeJIDFromLID()` first.
-- Do not add `IChatStorageRepository` methods without updating `chatstorage_wrapper.go` and the concrete repository.
-- Do not insert migrations in the middle of `getMigrations()`; append new entries only.
-- Do not remove the `evt.Sender.Device != 0` receipt check; it prevents duplicate webhook deliveries from linked devices.
-- Do not put generated/runtime media, QR codes, SQLite DBs, `.env`, or history dumps into source-oriented docs or commits unless explicitly requested.
-- Do not treat Chatwoot direct Postgres import as the live forwarding path; keep REST media handling and direct DB idempotency separate.
-
-## UNIQUE STYLES
-
-- Cobra subcommands are registered by `init()` side effects in `cmd/rest.go` and `cmd/mcp.go`.
-- The app uses mutable package globals for config, clients, repositories, and usecases instead of dependency injection from `main`.
-- REST has wider coverage than MCP: REST send has 12 routes; MCP exposes send, query, app, and group tool subsets.
-- Chat storage migrations are Go string literals in the repository, not external migration files.
-- The embedded UI uses Vue 3 from CDN, Fomantic UI modals/toasts, and custom delimiters `[[`, `]]`.
-- Release workflows generate GoReleaser YAML into `/tmp`; there is no committed `.goreleaser.yml`.
-- `AppVersion` is hard-coded as `v8.6.0` in `src/config/settings.go`; release workflows do not inject it with ldflags.
-- `src/pkg/error` declares package name `error`; import it with aliases such as `pkgError`.
-- Default SQLite builds use CGO `github.com/mattn/go-sqlite3`; `-tags purego` switches to `modernc.org/sqlite`.
-
-## COMMANDS
+#### 3. Terapkan Perubahan & Restart Container
+Jalankan perintah ini di direktori server VPS Anda untuk menerapkan konfigurasi baru:
 
 ```bash
-cd src && go run . rest
-cd src && go run . mcp
-cd src && go build -o whatsapp
-cd src && go test ./...
-cd src && go vet ./...
-cd src && go mod tidy
-docker compose up --build
+docker compose down
+docker compose up -d
 ```
 
-## NOTES
+## Roadmap & Ide Pengembangan Masa Depan (Inspirasi FinanceFlow PRO)
+Berikut adalah daftar fitur potensial yang dapat dikembangkan untuk Kainest ke depannya berdasarkan inspirasi UI/UX aplikasi kelas profesional:
 
-- Docker builds use `docker/golang.Dockerfile`, Go `1.25-alpine3.23`, CGO, and a final non-root `gowauser` process after the entrypoint fixes volume ownership.
-- Docker Compose mounts root-level `./storages` and `./statics` into `/app`; direct local runs from `src/` use `src/storages` and `src/statics`.
-- Docker publish is tag/manual driven. Arch-specific `-amd`, `-arm`, and `-armv7` images are merged into a versioned manifest; `latest` is also promoted by workflows.
-- `release.yml` declares `workflow_dispatch`, but release jobs are still guarded to tag refs.
-- GitHub workflows are release/publish oriented; there is no PR workflow that runs `go test`, `go vet`, or lint.
-- `DBKeysURI` defaults to the main DB URI when empty; avoid in-memory keys storage in production because privacy tokens must survive long-lived sessions.
-- `status@broadcast` chat names intentionally resolve to `Status`.
-- `src/.air.toml` excludes `statics` and `storages`; keep hot reload from watching runtime data.
+1. **Manajemen Tagihan & Cicilan (Upcoming Bills)**
+   - **Konsep:** Membuat modul "Target & Tagihan" di mana pengguna bisa memasukkan tagihan bulanan (langganan, cicilan, listrik).
+   - **Eksekusi AI:** Kainest atau Bot WhatsApp akan mengirimkan notifikasi pengingat otomatis (misal H-3) sebelum tagihan jatuh tempo.
+
+2. **Visualisasi Progres Target Tabungan (Saving Goals)**
+   - **Konsep:** Membuat tipe Kantong khusus bernama "Kantong Tabungan".
+   - **Mekanisme:** Uang yang dialokasikan ke kantong ini tidak dihitung sebagai pengeluaran bulanan, melainkan akan menambah *progress bar* menuju target spesifik (misal: Beli Laptop Rp 10.000.000).
+
+3. **Widget "AI Insight" & Status Kesehatan Keuangan**
+   - **Konsep:** Menampilkan skor kesehatan finansial pengguna di Dashboard (contoh: jika pengeluaran > pemasukan, status = Critical).
+   - **Eksekusi AI:** Menarik ringkasan analisis cerdas dari Groq AI untuk ditampilkan sebagai teks Insight harian di Dashboard (contoh: *"Pengeluaran makanmu minggu ini naik 20%, yuk rem sedikit"*).
+   - **Perbandingan Antar Bulan:** AI akan dapat melakukan analisis perbandingan pengeluaran antar bulan yang dipilih pengguna (misal: membandingkan kebiasaan belanja bulan Juni dan Juli) untuk memberikan *insight* tren yang lebih mendalam.
+
+4. **UI/UX: Premium Dark Mode & Glassmorphism Pekat**
+   - **Konsep:** Menambahkan opsi tema "Premium Dark Mode" di pengaturan aplikasi.
+   - **Visual:** Menggunakan latar belakang *navy blue/dark gray* polos dengan panel semi-transparan (Tailwind `dark:` classes yang lebih *deep*) untuk memberikan kesan elegan layaknya aplikasi finansial/trading level pro.
