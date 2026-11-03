@@ -22,9 +22,9 @@
         content: |
           TARGET_IMAGE={{ target_image }}
           WEBHOOK_URL={{ webhook_url }}
-          GOWA_BASIC_AUTH_USER={{ gowa_user | default('admin') }}
-          GOWA_BASIC_AUTH_PASS={{ gowa_pass | default('rahasia') }}
-          GOWA_PORT={{ gowa_port | default('3000') }}
+          GOWA_BASIC_AUTH_USER={{ gowa_user | default('admin', true) }}
+          GOWA_BASIC_AUTH_PASS={{ gowa_pass | default('rahasia', true) }}
+          GOWA_PORT={{ gowa_port | default('3000', true) }}
         dest: "{{ project_dir }}/.env"
         mode: '0600'
       no_log: true
@@ -72,7 +72,7 @@
 
     - name: Paksa matikan container dan proses apapun yang mengunci port target
       shell: |
-        TARGET_PORT="{{ gowa_port | default('3000') }}"
+        TARGET_PORT="{{ gowa_port | default('3000', true) }}"
         # 1. Periksa semua container docker yang mengekspos target port
         for id in $(docker ps -q); do
           if docker port "$id" 2>/dev/null | grep -q ":$TARGET_PORT"; then
@@ -92,11 +92,11 @@
 
     - name: Deteksi apakah port target masih ditempati container atau proses lain
       shell: |
-        CONTAINER=$(docker ps -q --filter "publish={{ gowa_port | default('3000') }}" | xargs -r docker inspect --format '{{ '{{' }}.Name{{ '}}' }} ({{ '{{' }}.Config.Image{{ '}}' }})')
+        CONTAINER=$(docker ps -q --filter "publish={{ gowa_port | default('3000', true) }}" | xargs -r docker inspect --format '{{ '{{' }}.Name{{ '}}' }} ({{ '{{' }}.Config.Image{{ '}}' }})')
         if [ -n "$CONTAINER" ]; then
           echo "CONTAINER_CONFLICT: $CONTAINER"
         fi
-        PROCESS=$(ss -tulpn | grep ":{{ gowa_port | default('3000') }} " || true)
+        PROCESS=$(ss -tulpn | grep ":{{ gowa_port | default('3000', true) }} " || true)
         if [ -n "$PROCESS" ]; then
           echo "HOST_PROCESS: $PROCESS"
         fi
@@ -105,7 +105,7 @@
 
     - name: Tampilkan peringatan jika port target masih terpakai oleh layanan lain
       debug:
-        msg: "PERINGATAN: Port {{ gowa_port | default('3000') }} masih dipakai oleh: {{ port_conflict_check.stdout_lines }}"
+        msg: "PERINGATAN: Port {{ gowa_port | default('3000', true) }} masih dipakai oleh: {{ port_conflict_check.stdout_lines }}"
       when: port_conflict_check.stdout != ""
 
     - name: Memaksa pembaruan (Up) Docker Compose
@@ -146,3 +146,13 @@
       until: container_status.stdout | replace('"', '') == "running"
       retries: 5
       delay: 3
+
+    - name: Ambil log runtime kainest-gowa
+      command: docker logs --tail=50 kainest-gowa
+      register: startup_logs
+      ignore_errors: yes
+
+    - name: Tampilkan log runtime kainest-gowa
+      debug:
+        msg: "{{ startup_logs.stdout_lines | default(startup_logs.stdout) }}"
+      when: startup_logs.stdout is defined
