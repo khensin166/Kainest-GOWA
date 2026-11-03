@@ -24,6 +24,7 @@
           WEBHOOK_URL={{ webhook_url }}
           GOWA_BASIC_AUTH_USER={{ gowa_user | default('admin') }}
           GOWA_BASIC_AUTH_PASS={{ gowa_pass | default('rahasia') }}
+          GOWA_PORT={{ gowa_port | default('3000') }}
         dest: "{{ project_dir }}/.env"
         mode: '0600'
       no_log: true
@@ -62,6 +63,34 @@
       fail:
         msg: "Gagal menarik image dari GHCR (Pull error). Periksa akses registry ghcr.io atau kuota penyimpanan VPS."
       when: pull_result.rc != 0
+
+    - name: Hentikan dan hapus container lama agar port 3000 dilepaskan
+      command: docker compose down --remove-orphans
+      args:
+        chdir: "{{ project_dir }}"
+      ignore_errors: yes
+
+    - name: Pastikan container kainest-gowa lama benar-benar bersih
+      shell: docker rm -f kainest-gowa || true
+      ignore_errors: yes
+
+    - name: Deteksi apakah port target masih ditempati container atau proses lain
+      shell: |
+        CONTAINER=$(docker ps -q --filter "publish={{ gowa_port | default('3000') }}" | xargs -r docker inspect --format '{{ '{{' }}.Name{{ '}}' }} ({{ '{{' }}.Config.Image{{ '}}' }})')
+        if [ -n "$CONTAINER" ]; then
+          echo "CONTAINER_CONFLICT: $CONTAINER"
+        fi
+        PROCESS=$(ss -tulpn | grep ":{{ gowa_port | default('3000') }} " || true)
+        if [ -n "$PROCESS" ]; then
+          echo "HOST_PROCESS: $PROCESS"
+        fi
+      register: port_conflict_check
+      ignore_errors: yes
+
+    - name: Tampilkan peringatan jika port target masih terpakai oleh layanan lain
+      debug:
+        msg: "PERINGATAN: Port {{ gowa_port | default('3000') }} masih dipakai oleh: {{ port_conflict_check.stdout_lines }}"
+      when: port_conflict_check.stdout != ""
 
     - name: Memaksa pembaruan (Up) Docker Compose
       command: docker compose --progress plain up -d --force-recreate --remove-orphans

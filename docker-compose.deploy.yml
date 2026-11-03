@@ -5,7 +5,7 @@ services:
     container_name: kainest-gowa
     restart: always
     ports:
-      - "3000:3000"
+      - "${GOWA_PORT:-3000}:3000"
     volumes:
       - gowa_storages:/app/storages
       - gowa_statics:/app/statics

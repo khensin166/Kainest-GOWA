@@ -126,5 +126,6 @@ jobs:
             -e "webhook_url=${{ secrets.HONO_WEBHOOK_URL }}" \
             -e "gowa_user=${{ secrets.GOWA_BASIC_AUTH_USER }}" \
             -e "gowa_pass=${{ secrets.GOWA_BASIC_AUTH_PASS }}" \
+            -e "gowa_port=${{ secrets.GOWA_PORT }}" \
             -e "ghcr_user=${{ github.actor }}" \
             -e "ghcr_token=${{ secrets.GITHUB_TOKEN }}"
