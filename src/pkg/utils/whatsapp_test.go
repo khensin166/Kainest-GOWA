@@ -86,6 +86,29 @@ func TestExtractPhoneFromVCard(t *testing.T) {
 			want:  "+5511998913283",
 		},
 		{
+			// iOS exports every phone with a group prefix and an Apple label line.
+			name:  "GroupedTelFromIOS",
+			vcard: "BEGIN:VCARD\nVERSION:3.0\nN:;Dave;;;\nFN:Dave\nitem1.TEL;type=CELL;type=VOICE;type=pref;waid=5511999990006:+55 11 99999-0006\nitem1.X-ABLabel:Mobile\nEND:VCARD",
+			want:  "+55 11 99999-0006",
+		},
+		{
+			name:  "GroupedTelLowercase",
+			vcard: "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Erin\r\nitem2.tel;type=CELL:+1 555 0101\r\nEND:VCARD",
+			want:  "+1 555 0101",
+		},
+		{
+			name:  "GroupedTelFolded",
+			vcard: "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Frank\r\nitem1.TEL;type=CELL;waid=5511998913283:\r\n +5511998913283\r\nEND:VCARD",
+			want:  "+5511998913283",
+		},
+		{
+			// Only the property name counts: a group or a value that merely
+			// contains "TEL" is not a phone.
+			name:  "OnlyTelPropertyName",
+			vcard: "BEGIN:VCARD\nVERSION:3.0\nFN:Grace\nTELEX:12345\nitem3.URL:https://example.com/TEL\nitem4.TEL:+1 555 0102\nEND:VCARD",
+			want:  "+1 555 0102",
+		},
+		{
 			name:  "NoTelLine",
 			vcard: "BEGIN:VCARD\nVERSION:3.0\nFN:Carol\nEND:VCARD",
 			want:  "",
@@ -722,5 +745,119 @@ func TestIsForwardableStorageMessage(t *testing.T) {
 				t.Fatalf("IsForwardableStorageMessage() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFormatJIDStripsDeviceSuffix(t *testing.T) {
+	tests := []struct {
+		name string
+		jid  string
+		want string
+	}{
+		{
+			name: "PhoneNumberJIDWithoutDevice",
+			jid:  "6281234567890@s.whatsapp.net",
+			want: "6281234567890@s.whatsapp.net",
+		},
+		{
+			name: "PhoneNumberJIDWithDevice",
+			jid:  "6281234567890:12@s.whatsapp.net",
+			want: "6281234567890@s.whatsapp.net",
+		},
+		{
+			name: "LIDWithoutDevice",
+			jid:  "123456789012345@lid",
+			want: "123456789012345@lid",
+		},
+		{
+			// Messages sent from WhatsApp Web/Desktop carry a device suffix.
+			// whatsmeow rejects AD JIDs as a send recipient, so it must be stripped
+			// for @lid senders too, not just @s.whatsapp.net ones.
+			name: "LIDWithDevice",
+			jid:  "123456789012345:12@lid",
+			want: "123456789012345@lid",
+		},
+		{
+			name: "BareNumberGetsDefaultServer",
+			jid:  "6281234567890",
+			want: "6281234567890@s.whatsapp.net",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatJID(tt.jid)
+			if got.String() != tt.want {
+				t.Errorf("FormatJID(%q) = %q, want %q", tt.jid, got.String(), tt.want)
+			}
+			if got.Device != 0 {
+				t.Errorf("FormatJID(%q) kept device %d, want 0", tt.jid, got.Device)
+			}
+		})
+	}
+}
+
+// TestExtractContextInfoInteractiveMessage pins that quoted/forwarded context
+// on an InteractiveMessage (business/Cloud API CTA buttons) is preserved.
+// Before this case existed, BuildEventMessage/BuildForwarded silently lost
+// replied_to_id/quoted_body and the forwarded flag for these messages, even
+// though every other message type carries them through ExtractContextInfo.
+func TestExtractContextInfoInteractiveMessage(t *testing.T) {
+	t.Run("interactive message with context info", func(t *testing.T) {
+		msg := &waE2E.Message{
+			InteractiveMessage: &waE2E.InteractiveMessage{
+				Body: &waE2E.InteractiveMessage_Body{Text: proto.String("Check this out")},
+				ContextInfo: &waE2E.ContextInfo{
+					StanzaID: proto.String("ABC123"),
+				},
+			},
+		}
+		ci := ExtractContextInfo(msg)
+		if ci == nil {
+			t.Fatal("expected non-nil ContextInfo")
+		}
+		if ci.GetStanzaID() != "ABC123" {
+			t.Fatalf("got StanzaID %q, want %q", ci.GetStanzaID(), "ABC123")
+		}
+	})
+
+	t.Run("interactive message with no context info yields nil", func(t *testing.T) {
+		msg := &waE2E.Message{
+			InteractiveMessage: &waE2E.InteractiveMessage{
+				Body: &waE2E.InteractiveMessage_Body{Text: proto.String("Check this out")},
+			},
+		}
+		if ci := ExtractContextInfo(msg); ci != nil {
+			t.Fatalf("expected nil ContextInfo, got %+v", ci)
+		}
+	})
+}
+
+// TestExtractContextInfoOtherMessageTypes pins the remaining message types that
+// carry their own ContextInfo, so replies, mentions, forwarding and ad
+// attribution are not lost when a customer answers a button, list or template,
+// or sends a poll, contact list, group invite or event.
+func TestExtractContextInfoOtherMessageTypes(t *testing.T) {
+	ci := &waE2E.ContextInfo{StanzaID: proto.String("ABC123")}
+	tests := map[string]*waE2E.Message{
+		"buttons response":      {ButtonsResponseMessage: &waE2E.ButtonsResponseMessage{ContextInfo: ci}},
+		"list response":         {ListResponseMessage: &waE2E.ListResponseMessage{ContextInfo: ci}},
+		"template button reply": {TemplateButtonReplyMessage: &waE2E.TemplateButtonReplyMessage{ContextInfo: ci}},
+		"interactive response":  {InteractiveResponseMessage: &waE2E.InteractiveResponseMessage{ContextInfo: ci}},
+		"contacts array":        {ContactsArrayMessage: &waE2E.ContactsArrayMessage{ContextInfo: ci}},
+		"buttons":               {ButtonsMessage: &waE2E.ButtonsMessage{ContextInfo: ci}},
+		"list":                  {ListMessage: &waE2E.ListMessage{ContextInfo: ci}},
+		"template":              {TemplateMessage: &waE2E.TemplateMessage{ContextInfo: ci}},
+		"product":               {ProductMessage: &waE2E.ProductMessage{ContextInfo: ci}},
+		"order":                 {OrderMessage: &waE2E.OrderMessage{ContextInfo: ci}},
+		"group invite":          {GroupInviteMessage: &waE2E.GroupInviteMessage{ContextInfo: ci}},
+		"event":                 {EventMessage: &waE2E.EventMessage{ContextInfo: ci}},
+		"poll v3":               {PollCreationMessageV3: &waE2E.PollCreationMessage{ContextInfo: ci}},
+		"poll v4":               {PollCreationMessageV4: &waE2E.FutureProofMessage{Message: &waE2E.Message{PollCreationMessage: &waE2E.PollCreationMessage{ContextInfo: ci}}}},
+	}
+	for name, msg := range tests {
+		if got := ExtractContextInfo(msg).GetStanzaID(); got != "ABC123" {
+			t.Errorf("%s: StanzaID = %q, want %q", name, got, "ABC123")
+		}
 	}
 }
