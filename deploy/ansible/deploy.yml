@@ -35,7 +35,7 @@
       failed_when: 
         - network_result.rc != 0
         - "'already exists' not in network_result.stderr"
-      changed_when: network_result.rc == 0
+      changed_when: network_result.rc == 0 
 
     - name: Login ke GitHub Container Registry di server target
       shell: echo "{{ ghcr_token }}" | docker login ghcr.io -u "{{ ghcr_user }}" --password-stdin
