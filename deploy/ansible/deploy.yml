@@ -64,10 +64,15 @@
         msg: "Gagal menarik image dari GHCR (Pull error). Periksa akses registry ghcr.io atau kuota penyimpanan VPS."
       when: pull_result.rc != 0
 
-    - name: Hentikan dan hapus container lama agar port 3000 dilepaskan
+    - name: Hentikan dan hapus container lama milik compose ini
       command: docker compose down --remove-orphans
       args:
         chdir: "{{ project_dir }}"
+      ignore_errors: yes
+
+    - name: Paksa hentikan dan hapus SEMUA container Docker yang menduduki port target
+      shell: |
+        docker ps -q --filter "publish={{ gowa_port | default('3000') }}" | xargs -r docker rm -f
       ignore_errors: yes
 
     - name: Pastikan container kainest-gowa lama benar-benar bersih
