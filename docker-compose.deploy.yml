@@ -15,7 +15,7 @@ services:
       
       # Webhook URL (Ke Hono)
       - WHATSAPP_WEBHOOK=${WEBHOOK_URL}
-      - WHATSAPP_WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+      - WHATSAPP_WEBHOOK_SECRET=${GOWA_WEBHOOK_SECRET:-}
       
       # Konfigurasi GOWA lainnya
       - APP_PORT=3000

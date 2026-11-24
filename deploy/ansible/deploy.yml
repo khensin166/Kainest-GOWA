@@ -22,6 +22,7 @@
         content: |
           TARGET_IMAGE={{ target_image }}
           WEBHOOK_URL={{ webhook_url }}
+          GOWA_WEBHOOK_SECRET={{ gowa_webhook_secret | default('', true) }}
           GOWA_BASIC_AUTH_USER={{ gowa_user | default('admin', true) }}
           GOWA_BASIC_AUTH_PASS={{ gowa_pass | default('rahasia', true) }}
           GOWA_PORT={{ gowa_port | default('3000', true) }}
